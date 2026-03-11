@@ -1,0 +1,222 @@
+package ui
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/darekbienkowski/goncaa/api/ncaa"
+	"github.com/darekbienkowski/goncaa/api/ncaa/repositories"
+	"github.com/darekbienkowski/goncaa/ui/components"
+	"github.com/darekbienkowski/goncaa/ui/constants"
+	"github.com/darekbienkowski/goncaa/ui/popup"
+
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/evertras/bubble-table/table"
+)
+
+type TickMsg time.Time
+
+var TABLE_TO_INDEX_MAP = map[string]int{
+	"awayBatters": 0,
+	"homeBatters": 1,
+}
+
+type GameScreenModel struct {
+	linescoreTable table.Model
+	playerTables   []table.Model
+	game           ncaa.GameNCAA
+	boxscore       ncaa.GameinfoNCAA
+	help           help.Model
+	previousModel  Model
+	popup          popup.IPopup
+	width, height  int
+	lastUpdate     time.Time // New feat
+}
+
+var gameScreenKM = GameScreenKM{
+	Back: key.NewBinding(
+		key.WithKeys("esc", "q"),
+		key.WithHelp("esc/q", "Back"),
+	),
+	Quit: key.NewBinding(
+		key.WithKeys("ctrl+c"),
+		key.WithHelp("ctrl+c", "quit"),
+	),
+	LeftTable: key.NewBinding(
+		key.WithKeys("shift+left", "H"),
+		key.WithHelp("shift+left/H", "Change Table"),
+	),
+	Up: key.NewBinding(
+		key.WithKeys("up", "k"),
+		key.WithHelp("up/k", "Up"),
+	),
+	Down: key.NewBinding(
+		key.WithKeys("down", "j"),
+		key.WithHelp("down/j", "Down"),
+	),
+}
+
+func (m GameScreenModel) Init() tea.Cmd {
+	return tea.Every(5*time.Second, func(t time.Time) tea.Msg {
+		return TickMsg(t)
+	})
+}
+
+func (m GameScreenModel) refreshGameData() (*GameScreenModel, error) {
+
+	boxscore, err := repositories.NewGameinfoRepository().GetGameinfoFromGameID(m.game.GameID)
+	if err == nil {
+		m.boxscore = *boxscore
+	}
+
+	linescore, err := repositories.NewLinescoreRepository().GetLinescoreFromGameId(m.game.GameID)
+	if err == nil {
+
+		splitColumnTargetWidth := m.width / 2
+
+		m.linescoreTable = components.BuildLinescoreTable(m.game.Away.Names.Short, m.game.Home.Names.Short, linescore).WithTargetWidth(m.width)
+		m.playerTables[TABLE_TO_INDEX_MAP["awayBatters"]] = components.BuildPlayerStatsTable(linescore.TeamBoxscores[1].PlayerStats).WithTargetWidth(splitColumnTargetWidth)
+		m.playerTables[TABLE_TO_INDEX_MAP["homeBatters"]] = components.BuildPlayerStatsTable(linescore.TeamBoxscores[0].PlayerStats).WithTargetWidth(splitColumnTargetWidth)
+	}
+
+	return &m, nil
+}
+
+func (m GameScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+
+	case TickMsg:
+
+		m.lastUpdate = time.Now()
+		updatedModel, err := m.refreshGameData()
+		if err == nil {
+			m = *updatedModel
+		}
+
+		cmds = append(cmds, tea.Every(5*time.Second, func(t time.Time) tea.Msg {
+			return TickMsg(t)
+		}))
+		return m, tea.Batch(cmds...)
+
+	case tea.WindowSizeMsg:
+		constants.DocStyle = lipgloss.NewStyle().Width(msg.Width).Height(msg.Height).Padding(constants.VPadding, constants.HPadding)
+
+		m.width = msg.Width - constants.DocStyle.GetHorizontalFrameSize()
+		m.height = msg.Height - constants.DocStyle.GetVerticalFrameSize()
+
+		splitColumnTargetWidth := m.width / 2
+
+		for i, table := range m.playerTables {
+			m.playerTables[i] = table.WithTargetWidth(splitColumnTargetWidth)
+		}
+
+		m.linescoreTable = m.linescoreTable.WithTargetWidth(m.width)
+
+		if m.popup != nil {
+			m.popup = m.popup.Resize(msg, m.renderMainScreen())
+		}
+
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, gameScreenKM.Quit):
+			return m, tea.Quit
+		case key.Matches(msg, gameScreenKM.Back):
+			if m.popup == nil {
+				return m.previousModel, tea.Batch(tea.ClearScreen)
+			} else {
+				gameScreenKM.SetEnabled(true)
+				m.popup = nil
+			}
+		}
+	}
+
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m GameScreenModel) View() string {
+	if m.popup != nil {
+		return m.popup.View()
+	}
+
+	return m.renderMainScreen()
+}
+
+func (m GameScreenModel) renderMainScreen() string {
+
+	updateTime := "Never"
+	if !m.lastUpdate.IsZero() {
+		updateTime = m.lastUpdate.Format("15:04:05")
+	}
+
+	scoreBox := components.RenderScoreText(&m.boxscore)
+
+	battersTables := lipgloss.JoinHorizontal(lipgloss.Top, m.playerTables[TABLE_TO_INDEX_MAP["awayBatters"]].View(), m.playerTables[TABLE_TO_INDEX_MAP["homeBatters"]].View())
+
+	content := lipgloss.JoinVertical(lipgloss.Center, scoreBox, fmt.Sprintf("Update time: %s", updateTime), m.linescoreTable.View(), battersTables)
+
+	contentHeight := lipgloss.Height(content)
+
+	helpTextHeight := lipgloss.Height(m.help.View(gameScreenKM))
+
+	helpPadding := m.height - contentHeight - helpTextHeight
+
+	helpContainer := lipgloss.NewStyle().
+		SetString(m.help.View(gameScreenKM)).
+		Width(m.width).
+		Align(lipgloss.Left).
+		PaddingTop(helpPadding).
+		String()
+
+	ui := lipgloss.JoinVertical(lipgloss.Center, content, helpContainer)
+
+	return constants.DocStyle.Render(ui)
+}
+
+func InitGameScreenModel(game ncaa.GameNCAA, previousModel Model) *GameScreenModel {
+	boxscore, err := repositories.NewGameinfoRepository().GetGameinfoFromGameID(game.GameID)
+	if err != nil {
+		fmt.Printf("Failed to get boxscore")
+		panic(err)
+	}
+
+	var (
+		linescore      *ncaa.Linescore
+		linescoreTable table.Model
+		playerTables   []table.Model
+	)
+
+	if ls, err := repositories.NewLinescoreRepository().GetLinescoreFromGameId(game.GameID); err == nil {
+		linescore = ls
+
+		homeBattersTable := components.BuildPlayerStatsTable(linescore.TeamBoxscores[0].PlayerStats)
+		awayBattersTable := components.BuildPlayerStatsTable(linescore.TeamBoxscores[1].PlayerStats)
+		playerTables = []table.Model{awayBattersTable, homeBattersTable}
+
+		linescoreTable = components.BuildLinescoreTable(game.Away.Names.Short, game.Home.Names.Short, linescore)
+	} else {
+		fmt.Printf("Linescore unavailable: %v\n", err)
+		playerTables = []table.Model{components.EmptyPlayerStatsTable(), components.EmptyPlayerStatsTable()}
+		linescoreTable = components.EmptyLinescoreTable()
+	}
+
+	gameScreenModel := GameScreenModel{
+		game:           game,
+		previousModel:  previousModel,
+		linescoreTable: linescoreTable,
+		playerTables:   playerTables,
+		boxscore:       *boxscore,
+		help:           help.New(),
+		width:          constants.WindowSize.Width,  // Set initial width
+		height:         constants.WindowSize.Height, // Set initial height
+	}
+
+	return &gameScreenModel
+}
