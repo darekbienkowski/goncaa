@@ -55,7 +55,7 @@
 
 ## About The Project
 
-![goncaa Screen Shot][product-demo]
+![goncaa Screen Shot][product-screenshot]
 
 `goncaa` is a terminal based user interface that allows you to scroll through both live and completed NCAA games and browse scores, players, and statistics.
 
