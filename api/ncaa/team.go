@@ -6,31 +6,12 @@ import (
 	"strings"
 )
 
-type GameTeam struct {
-	Score        int
-	LeagueRecord TeamRecord
-	Team         struct {
-		Name string
-	}
-}
-
 type GameTeamNCAA struct {
 	Score IntOrEmpty `json:"score"`
 	Names struct {
 		Char6 string `json:"char6"`
 		Short string `json:"short"`
 	} `json:"names"`
-}
-
-type TeamRecord struct {
-	Wins   int
-	Losses int
-	Pct    string
-}
-
-type Team struct {
-	Id   int
-	Name string
 }
 
 type IntOrEmpty int

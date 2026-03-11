@@ -5,11 +5,6 @@ import (
 	"time"
 )
 
-type GameTeams struct {
-	Away GameTeam
-	Home GameTeam
-}
-
 type GameNCAA struct {
 	GameID         int          `json:"gameID,string"`
 	StartTime      string       `json:"startTime"`
@@ -19,15 +14,6 @@ type GameNCAA struct {
 	Away           GameTeamNCAA `json:"away"`
 	Home           GameTeamNCAA `json:"home"`
 	GameState      string       `json:"gameState"`
-}
-
-type GameStatus struct {
-	AbstractGameState string
-	CodedGameState    string
-	DetailedState     string
-	StatusCode        string
-	StartTimeTBD      bool
-	AbstractGameCode  string
 }
 
 func (g GameNCAA) FilterValue() string {

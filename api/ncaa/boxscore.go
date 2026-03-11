@@ -1,10 +1,5 @@
 package ncaa
 
-import (
-	"encoding/json"
-	"strings"
-)
-
 type TeamGameinfoNCAA struct {
 }
 
@@ -35,11 +30,6 @@ type Location struct {
 	StateUsps string `json:"stateUsps"`
 }
 
-type GameinfoTeams struct {
-	Away GameinfoTeamNCAA
-	Home GameinfoTeamNCAA
-}
-
 type GameinfoTeamNCAA struct {
 	TeamId       string `json:"teamId"`
 	IsHome       bool   `json:"isHome"`
@@ -52,40 +42,4 @@ type GameinfoTeamNCAA struct {
 	Record       string `json:"record"`
 	DivisionName string `json:"divisionName"`
 	IsWinner     bool   `json:"isWinner"`
-}
-
-type GameinfoPlayerNCAA struct {
-	Number               int    `json:"number"`
-	FirstName            string `json:"firstName"`
-	LastName             string `json:"lastName"`
-	FullName             string `json:"fullName"`
-	Position             string `json:"position"`
-	MinutesPlayed        int    `json:"minutesPlayed"`
-	Starter              bool   `json:"starter"`
-	FieldGoalsMade       int    `json:"fieldGoalsMade"`
-	FieldGoalsAttempted  int    `json:"fieldGoalsAttempted"`
-	FreeThrowsMade       int    `json:"freeThrowsMade"`
-	FreeThrowsAttempted  int    `json:"freeThrowsAttempted"`
-	ThreePointsMade      int    `json:"threePointsMade"`
-	ThreePointsAttempted int    `json:"threePointsAttempted"`
-	OffensiveRebounds    int    `json:"offensiveRebounds"`
-	TotalRebounds        int    `json:"totalRebounds"`
-	Assists              int    `json:"assists"`
-	Turnovers            int    `json:"turnovers"`
-	PersonalFouls        int    `json:"personalFouls"`
-	Steals               int    `json:"steals"`
-	BlockedShots         int    `json:"blockedShots"`
-	Points               int    `json:"points"`
-}
-
-func (p *GameinfoPlayerNCAA) UnmarshalJSON(data []byte) error {
-	type alias GameinfoPlayerNCAA
-	var aux alias
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	*p = GameinfoPlayerNCAA(aux)
-	p.FullName = strings.TrimSpace(aux.FirstName + " " + aux.LastName)
-	return nil
 }
