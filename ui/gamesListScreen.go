@@ -177,7 +177,7 @@ func InitModel(date time.Time) tea.Model {
 		Foreground(constants.PrimaryColor).
 		Padding(0, 0, 0, 1)
 
-	customDelegate.Styles.SelectedDesc = customDelegate.Styles.SelectedTitle.Copy()
+	customDelegate.Styles.SelectedDesc = customDelegate.Styles.SelectedTitle
 
 	m := Model{gameList: list.New(items, customDelegate, 0, 0), date: date, help: help.New()}
 	updateTime := "Never"
@@ -201,6 +201,6 @@ func gamesToItems(games []ncaa.GameWrapper) []list.Item {
 
 func dateJumpDialog(m Model) dateJumpPopup.Model {
 	// return current time in local time rounded to today's date
-	popup := dateJumpPopup.New(m.View(), m.width-2*constants.PopupHPadding, m.height-2*constants.PopupVPadding)
-	return popup
+	popUp := dateJumpPopup.New(m.View(), m.width-2*constants.PopupHPadding, m.height-2*constants.PopupVPadding)
+	return popUp
 }
