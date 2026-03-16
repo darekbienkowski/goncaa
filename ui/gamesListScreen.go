@@ -18,12 +18,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const REFRESH_LIST_RATE = 30
+
 type Model struct {
 	date          time.Time
 	gameList      list.Model
 	help          help.Model
 	jumpPopup     popup.IPopup
 	width, height int
+	lastUpdate    time.Time // New feat
 }
 
 var gamesListKM = GamesListKM{
@@ -49,14 +52,29 @@ var gamesListKM = GamesListKM{
 	),
 }
 
+type TickMsg time.Time
+
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tea.Every(REFRESH_LIST_RATE*time.Second, func(t time.Time) tea.Msg {
+		return TickMsg(t)
+	})
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case TickMsg:
+
+		m.lastUpdate = time.Now()
+		m = m.UpdateWithDate(m.date)
+
+		cmds = append(cmds, tea.Every(REFRESH_LIST_RATE*time.Second, func(t time.Time) tea.Msg {
+			return TickMsg(t)
+		}))
+
+		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
 		constants.WindowSize = msg
 		constants.DocStyle = lipgloss.NewStyle().Width(msg.Width).Height(msg.Height).Padding(constants.VPadding, constants.HPadding)
@@ -111,14 +129,18 @@ func (m Model) UpdateWithDate(date time.Time) Model {
 	}
 
 	m.date = date
+	updateTime := "Never"
+	if !m.lastUpdate.IsZero() {
+		updateTime = m.lastUpdate.Format("15:04:05")
+	}
 
 	if len(schedule.Games) == 0 {
 		m.gameList.SetItems([]list.Item{})
-		m.gameList.Title = fmt.Sprintf("No games on %s", date.Format(time.DateOnly))
+		m.gameList.Title = fmt.Sprintf("No games on %s, Update time: %s", date.Format(time.DateOnly), updateTime)
 	} else {
 		newListItems := gamesToItems(schedule.Games)
 		m.gameList.SetItems(newListItems)
-		m.gameList.Title = fmt.Sprintf("Games for %s", date.Format(time.DateOnly))
+		m.gameList.Title = fmt.Sprintf("Games on %s, Update time: %s", date.Format(time.DateOnly), updateTime)
 	}
 
 	return m
@@ -158,7 +180,11 @@ func InitModel(date time.Time) tea.Model {
 	customDelegate.Styles.SelectedDesc = customDelegate.Styles.SelectedTitle.Copy()
 
 	m := Model{gameList: list.New(items, customDelegate, 0, 0), date: date, help: help.New()}
-	m.gameList.Title = fmt.Sprintf("Games on %s", date.Format(time.DateOnly))
+	updateTime := "Never"
+	if !m.lastUpdate.IsZero() {
+		updateTime = m.lastUpdate.Format("15:04:05")
+	}
+	m.gameList.Title = fmt.Sprintf("Games on %s, Update time: %s", date.Format(time.DateOnly), updateTime)
 
 	return m
 }
